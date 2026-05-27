@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Chat, { ChatMessage } from "../Chat/Chat";
 import {
   dbItemsToChatMessages,
   type DbHistoryItem,
 } from "../Chat/sessionHistory";
 import Sessions from "../Sessions/Sessions";
+import SessionListPanel from "../Sessions/SessionListPanel";
 import Agents from "../Agents/Agents";
 import Settings from "../Settings/Settings";
 import Skills from "../Skills/Skills";
@@ -88,6 +89,18 @@ function Layout({
   const [view, setView] = useState<View>("chat");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sessionSidebarOpen, setSessionSidebarOpen] = useState(() => {
+    try {
+      return (
+        window.localStorage.getItem("hermes-chat-session-sidebar-open") !==
+        "false"
+      );
+    } catch {
+      return true;
+    }
+  });
+  const [sessionSearchFocusToken, setSessionSearchFocusToken] = useState(0);
+  const resumeRequestRef = useRef(0);
   const [activeProfile, setActiveProfile] = useState("default");
   // Tabs lazy-mount on first visit, then stay mounted (display:none toggle).
   // Keeps IPC refetch / DOM rebuild off the tab-switch hot path.
@@ -104,6 +117,12 @@ function Layout({
     overflow: "hidden",
   });
 
+  const chatPaneStyle = (): React.CSSProperties => ({
+    ...paneStyle("chat"),
+    flexDirection: "row",
+    position: "relative",
+  });
+
   const goTo = useCallback((v: View) => {
     setVisitedViews((prev) => (prev.has(v) ? prev : new Set(prev).add(v)));
     setView(v);
@@ -113,6 +132,17 @@ function Layout({
   useEffect(() => {
     window.hermesAPI.isRemoteOnlyMode().then(setRemoteMode);
   }, [view]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "hermes-chat-session-sidebar-open",
+        String(sessionSidebarOpen),
+      );
+    } catch {
+      // localStorage can be unavailable in hardened/private environments.
+    }
+  }, [sessionSidebarOpen]);
 
   // Auto-update state
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
@@ -171,9 +201,24 @@ function Layout({
   const handleNewChat = useCallback(() => {
     // Abort any in-flight chat before clearing
     window.hermesAPI.abortChat();
+    resumeRequestRef.current += 1;
     setMessages([]);
     setCurrentSessionId(null);
     goTo("chat");
+  }, [goTo]);
+
+  const handleToggleSessionSidebar = useCallback(() => {
+    const nextOpen = !sessionSidebarOpen;
+    setSessionSidebarOpen(nextOpen);
+    if (nextOpen) {
+      setSessionSearchFocusToken((token) => token + 1);
+    }
+  }, [sessionSidebarOpen]);
+
+  const handleSearchSessions = useCallback(() => {
+    goTo("chat");
+    setSessionSidebarOpen(true);
+    setSessionSearchFocusToken((token) => token + 1);
   }, [goTo]);
 
   // Listen for menu IPC events (Cmd+N, Cmd+K from app menu)
@@ -182,13 +227,13 @@ function Layout({
       handleNewChat();
     });
     const cleanupSearch = window.hermesAPI.onMenuSearchSessions(() => {
-      goTo("sessions");
+      handleSearchSessions();
     });
     return () => {
       cleanupNewChat();
       cleanupSearch();
     };
-  }, [handleNewChat, goTo]);
+  }, [handleNewChat, handleSearchSessions]);
 
   const handleSelectProfile = useCallback((name: string) => {
     setActiveProfile(name);
@@ -198,9 +243,13 @@ function Layout({
 
   const handleResumeSession = useCallback(
     async (sessionId: string) => {
+      const requestId = resumeRequestRef.current + 1;
+      resumeRequestRef.current = requestId;
+      window.hermesAPI.abortChat();
       const items = (await window.hermesAPI.getSessionMessages(
         sessionId,
       )) as DbHistoryItem[];
+      if (resumeRequestRef.current !== requestId) return;
       setMessages(dbItemsToChatMessages(items));
       setCurrentSessionId(sessionId);
       goTo("chat");
@@ -270,13 +319,32 @@ function Layout({
             onDismiss={onDismissVerifyWarning}
           />
         )}
-        <div style={paneStyle("chat")}>
+        <div style={chatPaneStyle()} className="chat-pane">
+          {sessionSidebarOpen && (
+            <aside className="chat-session-sidebar">
+              {remoteMode ? (
+                <RemoteNotice feature="Sessions" />
+              ) : (
+                <SessionListPanel
+                  onResumeSession={handleResumeSession}
+                  onNewChat={handleNewChat}
+                  currentSessionId={currentSessionId}
+                  visible={view === "chat"}
+                  variant="sidebar"
+                  searchFocusToken={sessionSearchFocusToken}
+                />
+              )}
+            </aside>
+          )}
           <Chat
             messages={messages}
             setMessages={setMessages}
             sessionId={currentSessionId}
             profile={activeProfile}
+            onSessionResolved={setCurrentSessionId}
             onNewChat={handleNewChat}
+            sessionSidebarOpen={sessionSidebarOpen}
+            onToggleSessionSidebar={handleToggleSessionSidebar}
           />
         </div>
 
