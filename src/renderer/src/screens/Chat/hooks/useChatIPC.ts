@@ -9,6 +9,7 @@ import {
 interface UseChatIPCArgs {
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   setHermesSessionId: (id: string) => void;
+  onSessionResolved?: (sessionId: string) => void;
   setToolProgress: (tool: string | null) => void;
   setIsLoading: (loading: boolean) => void;
   setUsage: React.Dispatch<React.SetStateAction<UsageState | null>>;
@@ -23,6 +24,7 @@ interface UseChatIPCArgs {
 export function useChatIPC({
   setMessages,
   setHermesSessionId,
+  onSessionResolved,
   setToolProgress,
   setIsLoading,
   setUsage,
@@ -92,7 +94,10 @@ export function useChatIPC({
     });
 
     const cleanupDone = window.hermesAPI.onChatDone(async (sessionId) => {
-      if (sessionId) setHermesSessionId(sessionId);
+      if (sessionId) {
+        setHermesSessionId(sessionId);
+        onSessionResolved?.(sessionId);
+      }
       setToolProgress(null);
       setIsLoading(false);
       // End-of-stream merge from state.db. The gateway doesn't forward
@@ -157,6 +162,7 @@ export function useChatIPC({
   }, [
     setMessages,
     setHermesSessionId,
+    onSessionResolved,
     setToolProgress,
     setIsLoading,
     setUsage,

@@ -28,7 +28,10 @@ interface ChatProps {
   sessionId: string | null;
   profile?: string;
   onSessionStarted?: () => void;
+  onSessionResolved?: (sessionId: string) => void;
   onNewChat?: () => void;
+  sessionSidebarOpen?: boolean;
+  onToggleSessionSidebar?: () => void;
 }
 
 function Chat({
@@ -37,7 +40,10 @@ function Chat({
   sessionId,
   profile,
   onSessionStarted,
+  onSessionResolved,
   onNewChat,
+  sessionSidebarOpen = false,
+  onToggleSessionSidebar,
 }: ChatProps): React.JSX.Element {
   const { t } = useI18n();
   const [isLoading, setIsLoading] = useState(false);
@@ -76,6 +82,7 @@ function Chat({
   useChatIPC({
     setMessages,
     setHermesSessionId,
+    onSessionResolved,
     setToolProgress,
     setIsLoading,
     setUsage,
@@ -305,9 +312,11 @@ function Chat({
         hasMessages={messages.length > 0}
         contextFolder={contextFolder}
         showContextFolder={!remoteMode}
+        sessionSidebarOpen={sessionSidebarOpen}
         onPickFolder={handlePickFolder}
         onClearFolder={handleClearFolder}
         onToggleFast={toggleFastMode}
+        onToggleSessionSidebar={onToggleSessionSidebar}
         onNewChat={onNewChat}
         onClear={handleClear}
       />

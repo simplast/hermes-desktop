@@ -1,5 +1,12 @@
 import { memo } from "react";
-import { Trash2 as Trash, Plus, Zap, FolderOpen, X } from "lucide-react";
+import {
+  Trash2 as Trash,
+  Plus,
+  Zap,
+  FolderOpen,
+  X,
+  PanelLeft,
+} from "lucide-react";
 import { useI18n } from "../../components/useI18n";
 import type { UsageState } from "./types";
 
@@ -13,9 +20,11 @@ interface ChatHeaderProps {
   /** Whether to show the context-folder control (hidden in remote/SSH mode,
    *  where the picker would browse the wrong machine's filesystem). */
   showContextFolder: boolean;
+  sessionSidebarOpen?: boolean;
   onPickFolder: () => void;
   onClearFolder: () => void;
   onToggleFast: () => void;
+  onToggleSessionSidebar?: () => void;
   onNewChat?: () => void;
   onClear: () => void;
 }
@@ -49,9 +58,11 @@ export const ChatHeader = memo(function ChatHeader({
   hasMessages,
   contextFolder,
   showContextFolder,
+  sessionSidebarOpen = false,
   onPickFolder,
   onClearFolder,
   onToggleFast,
+  onToggleSessionSidebar,
   onNewChat,
   onClear,
 }: ChatHeaderProps): React.JSX.Element {
@@ -68,6 +79,18 @@ export const ChatHeader = memo(function ChatHeader({
         {usage && <UsageBadge usage={usage} />}
       </div>
       <div className="chat-header-actions">
+        {onToggleSessionSidebar && (
+          <button
+            className={`btn-ghost chat-sidebar-toggle ${
+              sessionSidebarOpen ? "chat-sidebar-toggle--active" : ""
+            }`}
+            onClick={onToggleSessionSidebar}
+            title={t("sessions.title")}
+            aria-pressed={sessionSidebarOpen}
+          >
+            <PanelLeft size={16} />
+          </button>
+        )}
         {showContextFolder &&
           (contextFolder ? (
             <div className="chat-ctxfolder">
